@@ -61,6 +61,11 @@ endif
 # 0.36.0-436-g8b8c5d3
 GIT_DESCRIPTION := $(shell git describe $(GIT_COMMIT))
 
+# IS_PRIVATE: empty=false, nonempty=true
+# Default is true if any of the git remotes have the string "private" in any of their URLs.
+_git_remote_urls := $(shell git remote | xargs -n1 git remote get-url --all)
+IS_PRIVATE ?= $(findstring private,$(_git_remote_urls))
+
 # Note that for everything except RC builds, VERSION will be set to the version
 # we'd use for a GA build. This is by design.
 ifneq ($(GIT_TAG_SANITIZED),)
@@ -76,11 +81,7 @@ ifndef DOCKER_REGISTRY
 $(error DOCKER_REGISTRY must be set. Use make DOCKER_REGISTRY=- for a purely local build.)
 endif
 
-ifeq ($(DOCKER_REGISTRY), -)
-AMBASSADOR_DOCKER_REPO ?= ambassador
-else
-AMBASSADOR_DOCKER_REPO ?= $(DOCKER_REGISTRY)/ambassador
-endif
+AMBASSADOR_DOCKER_REPO ?= $(if $(filter-out -,$(DOCKER_REGISTRY)),$(DOCKER_REGISTRY)/)ambassador$(if $(IS_PRIVATE),-private)
 
 ifneq ($(DOCKER_EXTERNAL_REGISTRY),)
 AMBASSADOR_EXTERNAL_DOCKER_REPO ?= $(DOCKER_EXTERNAL_REGISTRY)/ambassador
@@ -101,20 +102,20 @@ AMBASSADOR_DOCKER_IMAGE ?= $(AMBASSADOR_DOCKER_REPO):$(AMBASSADOR_DOCKER_TAG)
 AMBASSADOR_EXTERNAL_DOCKER_IMAGE ?= $(AMBASSADOR_EXTERNAL_DOCKER_REPO):$(AMBASSADOR_DOCKER_TAG)
 
 # IF YOU MESS WITH ANY OF THESE VALUES, YOU MUST RUN `make docker-update-base`.
-  ENVOY_REPO ?= git://github.com/datawire/envoy.git
-  ENVOY_COMMIT ?= 8f57f7d765939552a999721e8dac9b5a9a5cbb8b
+  ENVOY_REPO ?= $(if $(IS_PRIVATE),git@github.com:datawire/envoy-private.git,git://github.com/datawire/envoy.git)
+  ENVOY_COMMIT ?= 4616a0939972438ea47f0ac6657296fb836d1187
   ENVOY_COMPILATION_MODE ?= dbg
 
   ENVOY_FILE ?= envoy-bin/envoy-static-stripped
 
   # Increment BASE_ENVOY_RELVER on changes to `Dockerfile.base-envoy`, ENVOY_FILE, or Envoy recipes
-  BASE_ENVOY_RELVER ?= 3
+  BASE_ENVOY_RELVER ?= 1
   # Increment BASE_GO_RELVER on changes to `Dockerfile.base-go`
   BASE_GO_RELVER    ?= 1
   # Increment BASE_PY_RELVER on changes to `Dockerfile.base-py`, `releng/*`, `multi/requirements.txt`, `ambassador/requirements.txt`
   BASE_PY_RELVER    ?= 1
 
-  BASE_DOCKER_REPO ?= quay.io/datawire/ambassador-base
+  BASE_DOCKER_REPO ?= quay.io/datawire/ambassador-base$(if $(IS_PRIVATE),-private)
   BASE_ENVOY_IMAGE ?= $(BASE_DOCKER_REPO):envoy-$(BASE_ENVOY_RELVER).$(ENVOY_COMMIT).$(ENVOY_COMPILATION_MODE)
   BASE_GO_IMAGE    ?= $(BASE_DOCKER_REPO):go-$(BASE_ENVOY_RELVER).$(ENVOY_COMMIT).$(ENVOY_COMPILATION_MODE).$(BASE_GO_RELVER)
   BASE_PY_IMAGE    ?= $(BASE_DOCKER_REPO):py-$(BASE_ENVOY_RELVER).$(ENVOY_COMMIT).$(ENVOY_COMPILATION_MODE).$(BASE_PY_RELVER)
@@ -370,18 +371,11 @@ ambassador.docker: Dockerfile base-go.docker base-py.docker $(WATT) $(KUBESTATUS
 docker-images: ambassador-docker-image
 
 docker-push: docker-images
-ifeq ($(DOCKER_PUSH_AS),)
-	@echo "No DOCKER_PUSH_AS set"
+ifeq ($(DOCKER_REGISTRY),-)
+	@echo "No DOCKER_REGISTRY set"
 else
-	@if [ "$(GIT_DIRTY)" = "dirty" ]; then \
-		printf "Git tree is dirty and therefore 'docker push' is not allowed!\n"; \
-		exit 1; \
-	fi
-	@echo 'PUSH $(AMBASSADOR_DOCKER_IMAGE) as $(DOCKER_PUSH_AS)'
-ifneq ($(DOCKER_PUSH_AS),$(AMBASSADOR_DOCKER_IMAGE))
-	@docker tag $(AMBASSADOR_DOCKER_IMAGE) $(DOCKER_PUSH_AS)
-endif
-	@docker push $(DOCKER_PUSH_AS) | python releng/linify.py push.log
+	@echo 'PUSH $(AMBASSADOR_DOCKER_IMAGE)'
+	@docker push $(AMBASSADOR_DOCKER_IMAGE) | python releng/linify.py push.log
 endif
 
 # TODO: validate version is conformant to some set of rules might be a good idea to add here
@@ -450,7 +444,7 @@ KAT_CLIENT=venv/bin/kat_client
 
 venv/kat-backend-$(KAT_BACKEND_RELEASE).tar.gz: | venv/bin/activate
 	curl -L -o $@ https://github.com/datawire/kat-backend/archive/v$(KAT_BACKEND_RELEASE).tar.gz
-$(KAT_CLIENT): venv/kat-backend-$(KAT_BACKEND_RELEASE).tar.gz
+$(KAT_CLIENT): venv/kat-backend-$(KAT_BACKEND_RELEASE).tar.gz $(var.)KAT_BACKEND_RELEASE
 	cd venv && tar -xzf $(<F) kat-backend-$(KAT_BACKEND_RELEASE)/client/bin/client_$(GOOS)_$(GOARCH)
 	install -m0755 venv/kat-backend-$(KAT_BACKEND_RELEASE)/client/bin/client_$(GOOS)_$(GOARCH) $(CURDIR)/$(KAT_CLIENT)
 
