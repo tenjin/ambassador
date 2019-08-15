@@ -534,7 +534,14 @@ class V2Listener(dict):
                     }
                 } ]
             # If 'none' do not specify an access log
-            elif(config.ir.ambassador_module.envoy_log_type.lower() != "none") :
+            elif(config.ir.ambassador_module.envoy_log_type.lower() == "none") :
+                self.access_log = [ {
+                    'name': 'envoy.file_access_log',
+                    'config': {
+                        'path': '/dev/null'
+                    }
+                } ]
+            else:
                 # Use a sane access log spec
                 self.access_log = [ {
                     'name': 'envoy.file_access_log',
