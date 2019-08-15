@@ -84,6 +84,7 @@ class IRAmbassador (IRResource):
             diag_port=Constants.DIAG_PORT,
             auth_enabled=None,
             enable_ipv6=False,
+            envoy_log_filter={},
             envoy_log_path="/dev/fd/1",
             envoy_log_type="text",
             enable_ipv4=True,
