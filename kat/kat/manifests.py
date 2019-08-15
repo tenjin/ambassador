@@ -504,6 +504,8 @@ spec:
       value: "0"
     - name: AMBASSADOR_CONFIG_BASE_DIR
       value: "/tmp/ambassador"
+    - name: AMBASSADOR_DEBUG
+      value: "envoy"
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true  
