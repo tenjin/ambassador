@@ -533,7 +533,8 @@ class V2Listener(dict):
                         }
                     }
                 } ]
-            else:
+            # If 'none' do not specify an access log
+            elif(config.ir.ambassador_module.envoy_log_type.lower() != "none") :
                 # Use a sane access log spec
                 self.access_log = [ {
                     'name': 'envoy.file_access_log',
