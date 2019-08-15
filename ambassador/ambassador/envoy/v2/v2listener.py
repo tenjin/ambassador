@@ -501,11 +501,16 @@ class V2Listener(dict):
             # Use the actual listener name & port number
             self.name = "ambassador-listener-%s" % listener.service_port
 
+            params = {}
+
+            if config.ir.ambassador_module.envoy_log_filter:
+                params['filter'] = config.ir.ambassador_module.envoy_log_filter
+
             # Use sane access log spec in JSON
             if(config.ir.ambassador_module.envoy_log_type.lower() == "json") :
                 self.access_log = [ {
                     'name': 'envoy.file_access_log',
-                    'config': {
+                    'config': dict({
                         'path': config.ir.ambassador_module.envoy_log_path,
                         'json_format': {
                             'start_time': '%START_TIME%',
@@ -531,18 +536,16 @@ class V2Listener(dict):
                             'istio_policy_status': '%DYNAMIC_METADATA(istio.mixer:status)%',
                             'upstream_transport_failure_reason': '%UPSTREAM_TRANSPORT_FAILURE_REASON%'
                         }
-                    },
-                    'filter': config.ir.ambassador_module.envoy_log_filter
+                    }, **params)
                 } ]
             else:
                 # Use a sane access log spec
                 self.access_log = [ {
                     'name': 'envoy.file_access_log',
-                    'config': {
+                    'config': dict({
                         'path': config.ir.ambassador_module.envoy_log_path,
                         'format': 'ACCESS [%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% \"%REQ(X-FORWARDED-FOR)%\" \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" \"%REQ(:AUTHORITY)%\" \"%UPSTREAM_HOST%\"\n'
-                    },
-                    'filter': config.ir.ambassador_module.envoy_log_filter
+                    }, **params)
                 } ]
 
             # Assemble filters
