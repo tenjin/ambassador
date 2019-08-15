@@ -79,6 +79,7 @@ for el in "${seq[@]}"; do
 
         kubectl get pods --all-namespaces > "$tmpdir/pods.txt" 2>&1
         kubectl get svc --all-namespaces > "$tmpdir/svc.txt" 2>&1
+        kubectl logs -n kube-system kube-proxy > "$tmpdir/kube-proxy.txt" 2>&1
 
         if [ -n "${AMBASSADOR_DEV}" ]; then
             docker ps -a > "$tmpdir/docker.txt" 2>&1
