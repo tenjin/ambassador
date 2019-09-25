@@ -54,18 +54,25 @@ __version__ = Version
 
 boot_time = datetime.datetime.now()
 
+log_level = {
+    'debug': logging.DEBUG,
+    'info': logging.INFO,
+    'warn': logging.WARN,
+    'error': logging.ERROR
+}[os.environ.get('AMBASSADOR_LOG_LEVEL', 'debug').lower()]
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format="%%(asctime)s diagd %s [P%%(process)dT%%(threadName)s] %%(levelname)s: %%(message)s" % __version__,
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
 # Shut up Werkzeug's standard request logs -- they're just too noisy.
-logging.getLogger("werkzeug").setLevel(logging.CRITICAL)
+logging.getLogger("werkzeug").setLevel(max(log_level, logging.CRITICAL))
 
 # Likewise make requests a bit quieter.
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(max(log_level, logging.WARNING))
+logging.getLogger("requests").setLevel(max(log_level, logging.WARNING))
 
 ambassador_targets = {
     'mapping': 'https://www.getambassador.io/reference/configuration#mappings',
@@ -136,7 +143,7 @@ class DiagApp (Flask):
 
         # This feels like overkill.
         self.logger = logging.getLogger("ambassador.diagd")
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(log_level)
 
         if debug:
             self.logger.setLevel(logging.DEBUG)
