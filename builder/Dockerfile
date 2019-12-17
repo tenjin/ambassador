@@ -1,0 +1,165 @@
+###
+# This dockerfile builds all the source code and docker images for the
+# edge stack.
+##
+
+###
+# How it works.
+##
+# All our source code is built in a single monolithic build
+# container. (The "builder" stage below.) We then produce optimized
+# release images by copying the specific binaries and entrypoints out
+# of the build container. The build container must always contain all
+# the binaries and entrypoints for any container we produce, and
+# therefore (with the appropriate entrypoint) can function in place of
+# any release container. The release containers are trivial stages
+# that simply copy the relevant artifacts out of the builder
+# container.
+
+# This argument controlls the base image is used for both our build
+# container and for the release containers.
+ARG base="frolvlad/alpine-glibc:alpine-3.10"
+
+# This argument controls where the release images get their artifacts
+# from. We override it for incremental builds, but default it to the
+# builder stage so this Dockerfile works out of the box.
+ARG artifacts="builder"
+
+# This controls where we copy envoy from.
+ARG envoy="quay.io/datawire/ambassador-base:envoy-7.d17d947caef13f1bdd235c3fccff77814883bb46.opt"
+
+########################################
+# The builder image
+########################################
+
+FROM ${envoy} as envoy
+
+FROM ${base} as builder
+
+WORKDIR /buildroot
+
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/buildroot/bin
+
+# The YAML parser is... special. To get the C version, we need to install Cython and libyaml, then
+# build it locally -- just using pip won't work.
+
+RUN apk --no-cache add bash bash-completion ncurses curl jq rsync python3 python3-dev build-base libffi-dev openssl-dev sudo \
+                       iptables docker openssh-client libcap libcap-dev yaml-dev cython git nodejs npm && \
+    pip3 install -U pip && \
+    curl --fail https://dl.google.com/go/go1.13.linux-amd64.tar.gz | tar -C /usr/local -xzf - && \
+    curl --fail -L https://storage.googleapis.com/kubernetes-release/release/v1.16.0/bin/linux/amd64/kubectl -o /usr/bin/kubectl && \
+    chmod a+x /usr/bin/kubectl && \
+    curl --fail -L https://raw.githubusercontent.com/ahmetb/kubectx/v0.7.0/kubectx -o /usr/local/bin/kubectx && \
+    curl --fail -L https://raw.githubusercontent.com/ahmetb/kubectx/v0.7.0/kubens -o /usr/local/bin/kubens && \
+    chmod a+x /usr/local/bin/kubectx /usr/local/bin/kubens && \
+    curl --fail -L https://raw.githubusercontent.com/ahmetb/kubectx/v0.7.0/completion/kubectx.bash -o /usr/share/bash-completion/completions/kubectx && \
+    curl --fail -L https://raw.githubusercontent.com/ahmetb/kubectx/v0.7.0/completion/kubens.bash -o /usr/share/bash-completion/completions/kubens && \
+    curl -L https://raw.githubusercontent.com/jonmosco/kube-ps1/v0.7.0/kube-ps1.sh -o /usr/local/bin/kube-ps1.sh && \
+    ln -s /usr/bin/python3 /usr/bin/python && \
+    npm config set user 0 && \
+    npm config set unsafe-perm true && \
+    npm install -g rollup rollup-plugin-terser
+
+RUN sh -c "/usr/bin/kubectl completion bash > /usr/share/bash-completion/completions/kubectl"
+RUN chmod u+s $(which docker)
+
+COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
+
+ENV KUBECONFIG=/buildroot/kubeconfig.yaml
+
+# Download, build, and install PyYAML.
+RUN mkdir /tmp/pyyaml && \
+    cd /tmp/pyyaml && \
+    curl -O -L http://pyyaml.org/download/pyyaml/PyYAML-5.1.tar.gz && \
+    tar xzf PyYAML-5.1.tar.gz && \
+    cd PyYAML-5.1 && \
+    python3 setup.py --with-libyaml install
+
+# Then we can do the rest of the Python stuff.
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# XXX: this will go away
+RUN mkdir -p /ambassador/sidecars && \
+    ln -s /buildroot/bin/watt /ambassador/watt && \
+    ln -s /buildroot/ambassador/python/post_update.py /ambassador/post_update.py && \
+    ln -s /buildroot/ambassador/python/watch_hook.py /ambassador/watch_hook.py && \
+    ln -s /buildroot/ambassador/python/kubewatch.py /ambassador/kubewatch.py
+
+RUN adduser dw --disabled-password
+# SUDO_USERS HOSTS=(AS_USER) TAGS COMMANDS
+RUN echo "dw ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/datawire
+RUN chown dw /buildroot
+USER dw
+
+ENTRYPOINT [ "/bin/bash" ]
+
+
+########################################
+# The optimized images
+########################################
+
+FROM ${artifacts} as artifacts
+
+FROM ${base} as ambassador
+
+RUN apk --no-cache add bash curl python3 libcap
+
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=builder /usr/lib/python3.7/site-packages /usr/lib/python3.7/site-packages
+COPY --from=builder /usr/lib/libyaml* /usr/lib/
+
+COPY --from=artifacts /buildroot/bin/ambex /buildroot/bin/ambex
+COPY --from=artifacts /buildroot/bin/watt /buildroot/bin/watt
+COPY --from=artifacts /buildroot/bin/kubestatus /buildroot/bin/kubestatus
+COPY --from=artifacts /usr/bin/kubectl /usr/bin/kubectl
+COPY --from=artifacts /buildroot/ambassador/python /buildroot/ambassador/python
+COPY --from=artifacts /buildroot/bin/capabilities_wrapper /usr/local/bin/wrapper
+RUN cd /buildroot/ambassador/python && python setup.py install
+
+COPY --from=artifacts /ambassador /ambassador
+
+COPY --from=artifacts /buildroot/ambassador/demo/config /ambassador/ambassador-demo-config
+COPY --from=artifacts /buildroot/ambassador/demo/services /ambassador/demo-services
+
+WORKDIR /ambassador
+
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/buildroot/bin
+
+# XXX: is this still necessary or will the above copy inherit the
+#       correct permissions?
+# Fix permissions to allow correctly running as a non root user
+RUN chgrp -R 0 /ambassador && \
+    chmod -R u+x /ambassador && \
+    chmod -R g=u /ambassador /etc/passwd
+# The capabilities here grant the wrapper the ability to use the cap_net_bind_service cap
+# and for Envoy to inherit it.
+RUN setcap cap_net_bind_service=p /usr/local/bin/wrapper; setcap cap_net_bind_service=ei /usr/local/bin/envoy
+
+ENTRYPOINT [ "bash", "/buildroot/ambassador/python/entrypoint.sh" ]
+
+########################################
+
+FROM ${base} as kat-client
+
+COPY --from=artifacts /buildroot/bin/kat-client /usr/bin/kat-client
+RUN mkdir /work && ln -s /usr/bin/kat-client /work/kat_client
+CMD [ "sleep", "3600" ]
+
+########################################
+
+FROM ${base} as kat-server
+
+COPY --from=artifacts /buildroot/bin/kat-server /usr/bin/kat-server
+
+WORKDIR /work
+COPY server.crt server.crt
+COPY server.key server.key
+
+ENV GRPC_VERBOSITY=debug
+ENV GRPC_TRACE=tcp,http,api
+
+EXPOSE 8080
+CMD [ "kat-server" ]

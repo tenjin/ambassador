@@ -1,0 +1,16 @@
+*.version
+*.tmp
+.git
+*.egg-info
+__pycache__
+.pytest_cache
+.mypy_cache
+.dmypy.json
+go.sum
+/Makefile
+/builder/
+/bin_linux_amd64/
+/bin_darwin_amd64/
+/cxx/envoy/
+/ambassador/
+/vendor/

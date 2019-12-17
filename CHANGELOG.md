@@ -2,75 +2,28 @@
 
 ## BREAKING NEWS
 
+### AMBASSADOR EDGE STACK 1.0.0
+
+Ambassador Edge Stack 1.0.0 is in **EARLY ACCESS**. Major new features include the addition of the
+`Host` CRD, which provides for a simple way to let Ambassador know what domain names it should
+expect to be handling, and enables Ambassador to manage TLS certificates natively with ACME.
+
+Additionally, Edge Stack provides rate limiting and authentication under a free community license.
+
+There is one breaking change between Ambassador 0.85.0 and Edge Stack 1.0.0: the `RateLimitService`
+protocol `pb.lyft.ratelimit.RateLimitService` is no longer supported. `RateLimitService`s must now
+use the `envoy.service.ratelimit.v2.RateLimitService`.
+
 ### UPCOMING PROTOCOL CHANGES
 
-*In a future version*, Ambassador will change the versions of the GRPC protocols used to
-communicate with `AuthService`s and `RatelimitService`s:
+*In a future version*, Ambassador will change the version of the GRPC protocol used to
+communicate with `AuthService`s:
 
 | Resource | Current version | Upcoming version |
 | :------- | :-------------- | :--------------- |
 | `AuthService` | `envoy.service.auth.v2alpha` | `envoy.service.auth.v2` |
-| `RateLimitService` | `pb.lyft.ratelimit.RateLimitService` | `envoy.service.ratelimit.v2.RateLimitService` |
 
-These changes will not take effect until at least Ambassador 0.80.0. We expect to support both protocol versions during a transition period.
-
-### DEFAULT PORTS CHANGED IN AMBASSADOR 0.60
-
-Ambassador 0.60 by default listens for cleartext HTTP on port 8080 (rather than 80),
-and for HTTPS on port 8443 (rather than 443), in order to simplify running Ambassador without
-root privileges. If you are relying on the default port numbering in your installation, **you
-will need to change your configuration**.
-
-### AMBASSADOR 0.50+
-
-Ambassador 0.50.0 introduces a major rearchitecture of Ambassador onto Envoy V2 using the ADS. It also introduces the KAT suite for dramatically-faster functional testing (see `ambassador/tests/kat` for more).
-
-There are a number of breaking changes in Ambassador 0.50.0:
-
-   - Configuration from a `ConfigMap` is no longer supported.
-   
-   - Configuration from the filesystem is not supported in 0.50.0. It will be supported again in 0.50.1. 
-     
-   - **API version `ambassador/v0` is officially deprecated as of Ambassador 0.50.0-rc1.**
-      - API version `ambassador/v1` is the minimum recommended version for resources in Ambassador 0.50.0.
-   
-      - **Some `ambassador/v1` resources change semantics from their `ambassador/v0` versions**:
-          - The `Mapping` resource no longer supports `rate_limits` as that functionality has been 
-            subsumed by `labels`.
-          - The `AuthService` resource supports more extensive configuration options. An `ambassador/v0`
-            `AuthService` preserves the older, less flexible semantics: see below for more.
-          - The `RateLimitService` permits configuring its `domain` in `ambassador/v1`. 
-
-   - The default value of `use_remote_address` is now `True`. See `docs/reference/modules.md` for more information.
-
-   - Circuit breakers and outlier detection are not supported. They will be reintroduced in a later Ambassador release.
-     
-   - Ambassador now _requires_ a TLS `Module` to enable TLS termination, where previous versions would automatically enable
-     termation if the `ambassador-certs` secret was present. A minimal `Module` for the same behavior is:
-     
-           ---
-           kind: Module
-           name: tls
-           config:
-             server:
-               secret: ambassador-certs
-
-   - There are many changes around the external authentication service:
-   
-      - The authentication `Module` is no longer supported; use `AuthService` instead (which you probably already were).
-     
-      - External authentication now uses the core Envoy `envoy.ext_authz` filter, rather than the custom Datawire auth filter.
-         - `ext_authz` speaks the same protocol, and your existing external auth services should work, however:
-         - `ext_authz` does _not_ send all the request headers to the external auth service, and
-         - `ext_authz` _does_ authenticate `OPTIONS` requests!
-      
-      - We strongly recommend using API version `ambassador/v1` for all `AuthService` resources, so that you can fully
-        configure which headers are allowed from the client to the auth service, and from the auth service upstream. Using
-        API version `ambassador/v0`, Ambassador will attempt to preserve old behavior as documented in
-        `docs/reference/services/auth-service.md`, but you may very well find that you need to shift to API version
-        `ambassador/v1` to fully support your authentication system.
-   
-      - More information is available in `docs/reference/services/auth-service.md`.
+These changes will not take effect until at least Ambassador 1.1.0. We expect to support both protocol versions during a transition period.
 
 ## RELEASE NOTES
 
@@ -94,6 +47,167 @@ Format:
 --->
 
 <!--- CueAddReleaseNotes --->
+## [1.0.0-ea3] December 16, 2019
+[1.0.0-ea3]: https://github.com/datawire/ambassador/compare/v1.0.0-ea1...v1.0.0-ea3
+
+- Feature: initial edgectl support for Windows!
+- UX: be explicit that seeing the license applied can take a few minutes
+- Bugfix: don’t try to check for upgrades on every UI snapshot update
+- Bugfix: don’t activate the fallback TLSContext if its secret is not available
+- Bugfix: first cut at reducing reconfiguration churn
+
+## [1.0.0-ea1] December 10, 2019
+[1.0.0-ea1]: https://github.com/datawire/ambassador/compare/v0.85.0...v1.0.0-ea1
+
+### Caution!
+
+All of Ambassador's CRDs have been switched to `apiVersion: getambassador.io/v2`, and 
+**your resources will be upgraded when you apply the new CRDs**. We recommend that you
+follow the [migration instructions](https://getambassador.io/early-access/user-guide/upgrade-to-edge-stack/) and check your installation's
+behavior before upgrading your CRDs.
+
+### Features
+
+- Authentication and ratelimiting are now available under a free community license
+- The Host CRD provides an easy way to tell Ambassador about domains it should expect to handle
+- Given a Host CRD, Ambassador can manage TLS certificates using ACME (or you can manage them by hand)
+- Redirection from HTTP to HTTPS defaults to ON when termination contexts are present
+- Mapping and Host CRDs, as well as Ingress resources, get Status updates to provide better feedback
+
+### Bugfixes
+
+- CVE-2019–18801, CVE-2019–18802, and CVE-2019–18836 are fixed by including Envoy 1.12.2
+- CORS now happens before rate limiting
+- The reconfiguration engine is better protected from exceptions
+
+## [0.86.1] December 10, 2019
+[0.86.1]: https://github.com/datawire/ambassador/compare/v0.84.1...v0.86.0
+
+- Envoy updated to 1.12.2 for security fixes
+- Envoy TCP keepalives are now supported (thanks, [Bartek Kowalczyk](https://github.com/KowalczykBartek)!)
+- Envoy remote access logs are now supported
+- Correctly handle upgrades when the `LogService` CRD is not present
+
+(Ambassador 0.86.0 was superseded by Ambassador 0.86.1.)
+
+## [0.85.0] October 22, 2019
+[0.85.0]: https://github.com/datawire/ambassador/compare/v0.84.1...v0.85.0
+
+### Features
+
+- Support configuring the Envoy access log format (thanks to [John Esmet](https://github.com/esmet)!)
+
+## [0.84.1] October 20, 2019
+[0.84.1]: https://github.com/datawire/ambassador/compare/v0.84.0...v0.84.1
+
+### Major changes:
+- Bugfix: Fix /ambassador permissions to allow running as non-root - Thanks @dmayle (https://github.com/dmayle) for reporting the bug.
+
+## [0.84.0] October 18, 2019
+[0.84.0]: https://github.com/datawire/ambassador/compare/v0.83.0...v0.84.0
+
+### Features:
+
+- Support setting window_bits for the GZip filter (thanks to [Florent Delannoy](https://github.com/Pluies)!)
+- Correctly support tuning the regex_max_size, and bump its default to 200 (thanks to [Paul Salaberria](https://github.com/psalaberria002)!)
+- Support setting redirect_cleartext_from in a TLSContext
+
+### Bugfixes:
+
+- Correctly update loadbalancer status of Ingress resources
+- Don't enable diagd debugging in the test suite unless explicitly requested (thanks to [Jonathan Suever](https://github.com/suever)!)
+- Switch to an Envoy release build
+
+### Developer Notes:
+
+- Many many things about the build system have changed under the hood!
+   - Start with `make help`, and 
+   - Join our [Slack channel](https://d6e.co/slack) for more help!
+
+## [0.83.0] October 08, 2019
+[0.83.0]: https://github.com/datawire/ambassador/compare/v0.82.0...v0.83.0
+
+### Major changes:
+- Update Ambassador to address CVE-2019-15225 and CVE-2019-15226.
+
+NOTE: this switches the default regex engine! See the documentation for the `ambassador` `Module` for more.
+
+## [0.82.0] October 02, 2019
+[0.82.0]: https://github.com/datawire/ambassador/compare/v0.81.0...v0.82.0
+
+### Major changes:
+- Feature: Arrange for the Prometheus metrics endpoint to also return associated headers (thanks, [Jennifer Wu](https://github.com/jhsiaomei)!)
+- Feature: Support setting a TLS origination context when doing TLS to a RateLimitService (thanks, [Phil Peble](https://github.com/ppeble)!)
+- Feature: Allow configuring Envoy's access log path (thanks, [Jonathan Suever](https://github.com/suever)!)
+- Update: Switch to Python 3.7 and Alpine 3.10
+
+### Developer notes:
+- Switch back to the latest mypy (currently 0.730)
+- Environment variable KAT_IMAGE_PULL_POLICY can override the imagePullPolicy when running KAT tests
+- Updated Generated Envoy Golang APIs
+
+## [0.81.0] September 26, 2019
+[0.81.0]: https://github.com/datawire/ambassador/compare/v0.80.0...v0.81.0
+
+### Major changes:
+- Feature: ${} environment variable interpolation is supported in all Ambassador configuration resources (thanks, [Stefan Sedich](https://github.com/stefansedich)!)
+- Feature: DataDog APM tracing is now supported (thanks again, [Stefan Sedich](https://github.com/stefansedich)!)
+- Bugfix: Fix an error in the TLSContext schema (thanks, [@georgekaz](https://github.com/georgekaz)!)
+
+### Developer notes:
+- Test services can now be built, deployed, and tested more easily (see BUILDING.md)
+- `mypy` is temporarily pinned to version 0.720.
+
+## [0.80.0] September 20, 2019
+[0.80.0]: https://github.com/datawire/ambassador/compare/v0.78.0...v0.80.0
+
+### Major changes:
+- Feature: Basic support for the Kubernetes Ingress resource
+- Feature: Basic reporting for some common configuration errors (lack of Mappings, lack of TLS contexts)
+- Bugfix: Update Envoy to prevent crashing when updating AuthService under load
+
+### Developer notes
+- Golang components now use Go 1.13
+- Ambassador build now _requires_ clean type hinting
+- KAT client and server have been pulled back into the Ambassador repo
+
+## [0.78.0] September 11, 2019
+[0.78.0]: https://github.com/datawire/ambassador/compare/v0.77.0...v0.78.0
+
+### Major changes:
+- Feature: Support setting cipher_suites and ecdh_curves in TLSContext - #1782 (Thanks @teejaded)
+- Feature: Make 128-bits traceids the default - #1794 (Thanks @Pluies)
+- Feature: Set cap_net_bind_service to allow binding to low ports - #1720 (Thanks @swalberg)
+
+### Minor changes:
+- Testing: Add test that ambassador cli does not crash when called with --help - #1806 (Thanks @rokostik)
+
+## [0.77.0] September 05, 2019
+[0.77.0]: https://github.com/datawire/ambassador/compare/v0.76.0...v0.77.0
+
+- (Feature) Support the `least_request` load balancer policy (thanks, [Steve Flanders](https://github.com/flands)!)
+- (Misc) Many test and release-engineering improvements under the hood
+
+## [0.76.0] August 26, 2019
+[0.76.0]: https://github.com/datawire/ambassador/compare/v0.75.0...v0.76.0
+
+- circuit breakers now properly handle overriding a global circuit breaker within a Mapping ([#1767])
+- support for Knative 0.8.0 ([#1732])
+
+[#1767]: https://github.com/datawire/ambassador/issues/1767
+[#1732]: https://github.com/datawire/ambassador/issues/1732
+
+## [0.75.0] August 13, 2019
+[0.75.0]: https://github.com/datawire/ambassador/compare/0.74.1...0.75.0
+
+- (Feature) Update to Envoy 1.11.1, including security fixes
+- (Feature) You can use a `TLSContext` without a `secret` to set origination options ([#1708])
+- (Feature) Canary deployments can now use multiple `host_rewrite` values ([#1159])
+- (Bugfix) Make sure that Ambassador won't mistakenly complain about the number of RateLimit and Tracing services (thanks, [Christian Claus](https://github.com/cclauss)!)
+
+[#1159]: https://github.com/datawire/ambassador/issues/1159
+[#1708]: https://github.com/datawire/ambassador/issues/1708
+
 ## [0.74.1] August 06, 2019
 [0.74.1]: https://github.com/datawire/ambassador/compare/0.74.0...0.74.1
 

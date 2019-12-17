@@ -1,45 +1,52 @@
 # TLS Origination
 
-Sometimes you may want traffic from Ambassador to your services to be encrypted. For the cases where terminating TLS at the ingress is not enough, Ambassador can be configured to originate TLS connections to your upstream services.
+Sometimes you may want traffic from Ambassador Edge Stack to your services to be encrypted. For the cases where terminating TLS at the ingress is not enough, Ambassador Edge Stack can be configured to originate TLS connections to your upstream services.
 
 ## Basic Configuration
 
-Telling Ambassador to talk to your services over HTTPS is easily configured in the `Mapping` definition by setting `https://` in the `service` field.
+Telling Ambassador Edge Stack to talk to your services over HTTPS is easily configured in the `Mapping` definition by setting `https://` in the `service` field.
 
 ```yaml
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v2
 kind: Mapping
-name: basic-tls-mapping
-prefix: /
-service: https://example-service
+metadata:
+  name: basic-tls
+spec:
+  prefix: /
+  service: https://example-service
 ```
 
 ## Advanced Configuration Using a `TLSContext`
 
-If your upstream services require more than basic HTTPS support (e.g. minimum TLS version support) you can create a `TLSContext` for Ambassador to use when originating TLS.
+If your upstream services require more than basic HTTPS support (e.g. minimum TLS version support) you can create a `TLSContext` for Ambassador Edge Stack to use when originating TLS.
 
 ```yaml
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v2
 kind: TLSContext
-name: example-upstream
-secret: self-signed-cert
-min_tls_version: v1.3
+metadata:
+  name: tls-context
+spec:
+  secret: self-signed-cert
+  min_tls_version: v1.3
 ```
 
-Configure Ambassador to use this `TLSContext` for connections to upstream services by setting the `tls` attribute of a `Mapping`
+Configure Ambassador Edge Stack to use this `TLSContext` for connections to upstream services by setting the `tls` attribute of a `Mapping`
 
 ```yaml
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v2
 kind: Mapping
-name: basic-tls-mapping
-prefix: /
-service: https://example-service
+metadata:
+  name: mapping-with-tls-context
+spec:
+  prefix: /
+  service: https://example-service
+  tls: tls-context
 ```
 
-The `example-service` service must now support tls v1.3 for Ambassador to connect.
+The `example-service` service must now support TLS v1.3 for Ambassador Edge Stack to connect.
 
 **Note**: 
 
