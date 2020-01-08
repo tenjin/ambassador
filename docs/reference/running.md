@@ -18,12 +18,15 @@ Starting with Ambassador 0.35, we support running Ambassador as non-root. This i
 
 ```yaml
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ambassador
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      service: ambassador
   template:
     metadata:
       labels:
@@ -63,7 +66,7 @@ existing file into a directory will fail.)
 
 ## Running as daemonset
 
-Ambassador can be deployed as daemonset to have one pod per node in Kubernetes cluster. This setup up is especially helpful when you have Kubernetes cluster running on bare metal or private cloud. 
+Ambassador can be deployed as daemonset to have one pod per node in Kubernetes cluster. This setup is especially helpful when you have Kubernetes cluster running on bare metal or private cloud. 
 
 * Ideal scenario could be when you are running containers on Kubernetes along side with your non containerized applications running exposed via VIP using BIG-IP or similar products. In such cases, east-west traffic is routed based on iRules to certain set of application pools consisting of application or web servers. In this setup, along side of traditonal application servers, two or more Ambassador pods can also be part of the application pools. In case of failure there is atleast one Ambassdor pod available to BIG-IP and can take care of routing traffic to kubernetes cluster.
 
@@ -102,20 +105,14 @@ If you are using Ambassador Pro, if you set `AMBASSADOR_NAMESPACE` or `AMBASSADO
 Ambassador supports running multiple Ambassadors in the same cluster, without restricting a given Ambassador to a single namespace. This is done with the `AMBASSADOR_ID` setting. In the Ambassador module, set the `ambassador_id`, e.g.,
 
 ```yaml
-apiVersion: v1
-kind: Service
+---
+apiVersion: getambassador.io/v1
+kind:  Module
 metadata:
-  name: ambassador
-  namespace: ambassador-1
-  labels:
-    app: ambassador
-  annotations:
-    getambassador.io/config: |
-      ---
-      apiVersion: ambassador/v1
-      kind:  Module
-      name:  ambassador
-      ambassador_id: ambassador-1
+  name:  ambassador
+spec:
+  config:
+    ambassador_id: ambassador-1
 ```
 
 Then, assign each Ambassador pod a unique `AMBASSADOR_ID` with the environment variable as part of your deployment:
@@ -132,32 +129,40 @@ Ambassador will then only use YAML objects that include an appropriate `ambassad
 
 ```yaml
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v1
 kind:  Mapping
-name:  mapping_used_1
-ambassador_id: ambassador-1
-prefix: /demo1/
-service: demo1
+metadata:
+  name:  mapping-used
+spec:
+  ambassador_id: ambassador-1
+  prefix: /demo1/
+  service: demo1
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v1
 kind:  Mapping
-name:  mapping_used_2
-ambassador_id: [ "ambassador-1", "ambassador-2" ]
-prefix: /demo2/
-service: demo2
+metadata:
+  name:  mapping-used-2
+spec:
+  ambassador_id: [ "ambassador-1", "ambassador-2" ]
+  prefix: /demo2/
+  service: demo2
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v1
 kind:  Mapping
-name:  mapping_skipped_1
-prefix: /demo3/
-service: demo3
+metadata:
+  name:  mapping-skipped
+spec:
+  prefix: /demo3/
+  service: demo3
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v1
 kind:  Mapping
-name:  mapping_skipped_2
-ambassador_id: ambassador-2
-prefix: /demo4/
-service: demo4
+metadata:
+  name:  mapping-skipped-2
+spec:
+  ambassador_id: ambassador-2
+  prefix: /demo4/
+  service: demo4
 ```
 
 The list syntax (shown in `mapping_used_2` above) permits including a given object in the configuration for multiple Ambassadors. In this case `mapping_used_2` will be included in the configuration for `ambassador-1` and also for `ambassador-2`.
@@ -180,7 +185,7 @@ Also note that the YAML files in the configuration directory must contain Ambass
 
 ## Log levels and debugging
 
-Ambassador and Ambassador Pro support more verbose debugging levels. If using Ambassador, the [diagnostics](diagnostics) service has a button to enable debug logging. Be aware that if you're running Ambassador on multiple pods, the debug log levels are not enabled for all pods -- they are configured on a per-pod basis.
+Ambassador and Ambassador Pro support more verbose debugging levels. If using Ambassador, the [diagnostics](/reference/diagnostics/) service has a button to enable debug logging. Be aware that if you're running Ambassador on multiple pods, the debug log levels are not enabled for all pods -- they are configured on a per-pod basis.
 
 If using Ambassador Pro, you can adjust the log level by setting the `APP_LOG_LEVEL` environment variable; from least verbose to most verbose, the valid values are `error`, `warn`/`warning`, `info`, `debug`, and `trace`; the default is `info`.
 
@@ -211,6 +216,7 @@ Unless disabled, Ambassador will also report the following anonymized informatio
 | `cluster_http_count` | int | count of clusters using HTTP or HTTPS upstream |
 | `cluster_routing_envoy_rh_count` | int | count of clusters routing using Envoy `ring_hash` |
 | `cluster_routing_envoy_maglev_count` | int | count of clusters routing using Envoy `maglev` |
+| `cluster_routing_envoy_lr_count` | int | count of clusters routing using Envoy `least_request` |
 | `cluster_routing_envoy_rr_count` | int | count of clusters routing using Envoy `round_robin` |
 | `cluster_routing_kube_count` | int | count of clusters routing using Kubernetes |
 | `cluster_tls_count` | int | count of clusters originating TLS |
@@ -223,6 +229,7 @@ Unless disabled, Ambassador will also report the following anonymized informatio
 | `endpoint_routing` | bool | is endpoint routing enabled? |
 | `endpoint_routing_envoy_rh_count` | int | count of endpoints being routed using Envoy `ring_hash` |
 | `endpoint_routing_envoy_maglev_count` | int | count of endpoints being routed using Envoy `maglev` |
+| `endpoint_routing_envoy_lr_count` | int | count of endpoints being routed using Envoy `least_request` |
 | `endpoint_routing_envoy_rr_count` | int | count of endpoints being routed using Envoy `round_robin` |
 | `endpoint_routing_kube_count` | int | count of endpoints being routed using Kubernetes |
 | `endpoint_tls_count` | int | count of endpoints to which Ambassador will originate TLS |
@@ -266,7 +273,7 @@ Unless disabled, Ambassador will also report the following anonymized informatio
 | `tls_using_contexts` | bool | is the old TLS module in use? |
 | `tls_using_module` | bool | are new TLSContext resources in use? |
 | `tracing` | bool | is tracing in use? |
-| `tracing_driver` | str | tracing driver in use ('zipkin', 'lightstep', or `null` if not active) |
+| `tracing_driver` | str | tracing driver in use ('zipkin', 'lightstep', 'datadog', or `null` if not active) |
 | `use_proxy_proto` | bool | is the `PROXY` protocol in use? |
 | `use_remote_address` | bool | is Ambassador honoring remote addresses? |
 | `x_forwarded_proto_redirect` | bool | is Ambassador redirecting based on `X-Forwarded-Proto`? |

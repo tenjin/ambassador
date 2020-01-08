@@ -23,9 +23,9 @@
         link: /user-guide/docker-compose
       - title: Bare Metal
         link: /user-guide/bare-metal
-      - title: Ambassador Pro
+      - title: Ambassador Pro and Dev Portal
         link: /user-guide/ambassador-pro-install
-      - title: Upgrading to Ambassador Pro
+      - title: Upgrade Ambassador Open Source to Ambassador Pro
         link: /user-guide/upgrade-to-pro
       - title: Early Access Releases
         link: /user-guide/early-access
@@ -88,6 +88,8 @@
         link: /user-guide/consul
       - title: Istio and Ambassador
         link: /user-guide/with-istio
+      - title: Linkerd and Ambassador
+        link: /user-guide/linkerd2
     - title: Best Practices
       items:
       - title: Integration Testing with Service Preview
@@ -100,6 +102,10 @@
       items:
       - title: Distributed Tracing
         link: /user-guide/tracing-tutorial
+      - title: DataDog Distributed Tracing
+        link: /user-guide/tracing-tutorial-datadog
+      - title: Zipkin Distributed Tracing
+        link: /user-guide/tracing-tutorial-zipkin
       - title: Monitoring Ingress with Prometheus and Grafana
         link: /user-guide/monitoring
 - title: Reference
@@ -108,6 +114,15 @@
     - title: Configuring Ambassador
       link: /reference/configuration
       items:
+        - title: Configuration Format
+          link: /reference/config-format
+          items:
+            - title: Custom Resource Definitions
+              link: /reference/core/crds
+            - title: Service Annotations
+              link: /reference/core/annotations
+            - title: Kubernetes Ingress Resource
+              link: /reference/core/ingress-controller
         - title: Global Configuration
           link: /reference/modules
           items:
@@ -202,10 +217,10 @@
               link: /reference/pro/authentication
             - title: Environment
               link: /reference/pro/environment
-        - title: Custom Resource Definitions
-          link: /reference/core/crds
         - title: Filters
           link: /reference/filter-reference
+    - title: Developer Portal
+      link: /reference/dev-portal
     - title: Running Ambassador
       link: /reference/running
       items:

@@ -32,12 +32,15 @@ This can be configured by setting `hostNetwork: true` in the Ambassador deployme
 
 ```diff
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ambassador
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      service: ambassador
   template:
     metadata:
       annotations:
@@ -50,7 +53,7 @@ spec:
       serviceAccountName: ambassador
       containers:
       - name: ambassador
-        image: quay.io/datawire/ambassador:%version%
+        image: quay.io/datawire/ambassador:$version$
         resources:
           limits:
             cpu: 1

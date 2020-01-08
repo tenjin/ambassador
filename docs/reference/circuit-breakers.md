@@ -36,9 +36,12 @@ circuit_breakers:
 Circuit breakers defined on a single mapping:
 
 ```yaml
-apiVersion: ambassador/v1
+---
+apiVersion: getambassador.io/v1
 kind:  Mapping
-name:  tour-backend_mapping
+metadata:
+  name:  tour-backend
+spec:
 prefix: /backend/
 service: tour
 circuit_breakers:
@@ -49,24 +52,28 @@ circuit_breakers:
 A global circuit breaker:
 
 ```yaml
-apiVersion: ambassador/v0
+apiVersion: getambassador.io/v1
 kind:  Module
-name:  ambassador
-config:
-  circuit_breakers:
-  - max_connections: 2048
-    max_pending_requests: 2048
+metadata:
+  name:  ambassador
+spec:
+  config:
+    circuit_breakers:
+    - max_connections: 2048
+      max_pending_requests: 2048
 ---
-apiVersion: ambassador/v1
+apiVersion: getambassador.io/v1
 kind:  Mapping
-name:  tour-backend_mapping
+metadata:
+  name:  tour-backend
+spec:
 prefix: /backend/
 service: tour
 ```
 
 ## Circuit breakers and automatic retries
 
-Circuit breakers are best used in conjunction with [automatic retries](reference/retries). Here are some examples:
+Circuit breakers are best used in conjunction with [automatic retries](/reference/retries). Here are some examples:
 
 * You've configured automatic retries for failed requests to a service. Your service is under heavy load, and starting to timeout on servicing requests. In this case, automatic retries can exacerbate your problem, increasing the total request volume by 2x or more. By aggressively circuit breaking, you can mitigate failure in this scenario.
 * To circuit break when services are slow, you can combine circuit breakers with retries. Reduce the timeout for retries, and then set a circuit breaker that detects many retries. In this setup, if your service doesn't respond quickly, a flood of retries will occur, which can then trip the circuit breaker.
@@ -88,4 +95,4 @@ circuit_breakers:
   max_retries: 3
 ```
 
-Circuit breaker metrics are exposed in statsd. For more information about the specific statistics, see the [Envoy documentation](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/circuit_breaking).
+Circuit breaker metrics are exposed in statsd. For more information about the specific statistics, see the [Envoy documentation](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/circuit_breaking.html).

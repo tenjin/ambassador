@@ -1,7 +1,13 @@
 ---
+dist: bionic
+
 language: python
 python:
-  - "3.6"
+  - "3.7"
+addons:
+  apt:
+    packages:
+      - bsdtar
 
 cache:
   directories:
@@ -20,16 +26,6 @@ services:
 
 env:
   global:
-    - PATH=~/bin:$PATH
-    - DOCKER_REGISTRY=quay.io/datawire
-    
-    # Set the branch in a predictable way. Travis behavior is that when you are
-    # executing due to a PR then the value of $TRAVIS_BRANCH is actually the
-    # name of the base branch (e.g. "master" rather than "dev/new-feature").
-    #
-    # See also: https://graysonkoonce.com/getting-the-current-branch-name-during-a-pull-request-in-travis-ci/
-    - GIT_BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then printf "$TRAVIS_BRANCH"; else printf "$TRAVIS_PULL_REQUEST_BRANCH"; fi)
-
     # Set from the repository settings:
     #- DOCKER_BUILD_USERNAME=[secure] (optional)
     #- DOCKER_BUILD_PASSWORD=[secure] (optional)
@@ -45,6 +41,11 @@ env:
 
 install:
   - ./releng/travis-install.sh
+  # Adjust the environment per travis-install.sh
+  - PATH=~/bin:$PATH
+  - source ~/.gimme/envs/latest.env
+  - export DEV_KUBECONFIG=~/.kube/$(cat ~/kubernaut-claim.txt).yaml
+  - export DEV_REGISTRY=localhost:31000
 
 script:
   - ./releng/travis-script.sh

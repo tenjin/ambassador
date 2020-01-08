@@ -19,12 +19,21 @@ set -o nounset
 
 printf "== Begin: travis-script.sh ==\n"
 
-if [[ "$GIT_BRANCH" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    COMMIT_TYPE=GA
-elif [[ "$GIT_BRANCH" =~ -rc[0-9]+$ ]]; then
-    COMMIT_TYPE=RC
-elif [[ "$GIT_BRANCH" =~ -ea[0-9]+$ ]]; then
-    COMMIT_TYPE=EA
+if [[ -n "$TRAVIS_TAG" ]]; then
+    if [[ "$TRAVIS_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        COMMIT_TYPE=GA
+    elif [[ "$TRAVIS_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
+        COMMIT_TYPE=RC
+    elif [[ "$TRAVIS_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-ea[0-9]+$ ]]; then
+        COMMIT_TYPE=EA
+    else
+        echo "TRAVIS_TAG '$TRAVIS_TAG' is not in one of the recognized tag formats:" >&2
+        echo " - 'vSEMVER'" >&2
+        echo " - 'vSEMVER-rcN'" >&2
+        echo " - 'vSEMVER-eaN'" >&2
+        echo "Note that the tag name must start with a lowercase 'v'" >&2
+        exit 1
+    fi
 elif [[ "$TRAVIS_PULL_REQUEST" != false ]]; then
     COMMIT_TYPE=PR
 else
@@ -47,20 +56,9 @@ printf "========\nCOMMIT_TYPE $COMMIT_TYPE; git status:\n"
 git status
 
 printf "========\nSetting up environment...\n"
-case "$COMMIT_TYPE" in
-    GA)
-        eval $(make DOCKER_EXTERNAL_REGISTRY=$DOCKER_REGISTRY export-vars)
-        ;;
-    *)
-        eval $(make USE_KUBERNAUT=true \
-                    DOCKER_EPHEMERAL_REGISTRY=true \
-                    DOCKER_EXTERNAL_REGISTRY=$DOCKER_REGISTRY \
-                    DOCKER_REGISTRY=localhost:31000 \
-                    export-vars)
-        ;;
-esac
+
 set -o xtrace
-make print-vars
+eval "$(make export-vars)"
 
 printf "========\nStarting build...\n"
 
@@ -71,13 +69,10 @@ case "$COMMIT_TYPE" in
     *)
         # CI might have set DOCKER_BUILD_USERNAME and DOCKER_BUILD_PASSWORD
         # (in case BASE_DOCKER_REPO is private)
-        if [[ -n "${DOCKER_BUILD_USERNAME:-}" ]]; then
-            docker login -u="$DOCKER_BUILD_USERNAME" --password-stdin "${BASE_DOCKER_REPO%%/*}" <<<"$DOCKER_BUILD_PASSWORD"
-        fi
+       if [[ -n "${DOCKER_BUILD_USERNAME:-}" ]]; then
+           docker login -u="$DOCKER_BUILD_USERNAME" --password-stdin "${BASE_DOCKER_REPO%%/*}" <<<"$DOCKER_BUILD_PASSWORD"
+       fi
 
-        make setup-develop cluster.yaml docker-registry
-        make docker-push DOCKER_PUSH_AS="$AMBASSADOR_DOCKER_IMAGE" # to the in-cluster registry
-        # make KAT_REQ_LIMIT=1200 test
         make test
         ;;
 esac
@@ -87,24 +82,21 @@ printf "========\nPublishing artifacts...\n"
 case "$COMMIT_TYPE" in
     GA)
         if [[ -n "${DOCKER_RELEASE_USERNAME:-}" ]]; then
-            docker login -u="$DOCKER_RELEASE_USERNAME" --password-stdin "${AMBASSADOR_EXTERNAL_DOCKER_REPO%%/*}" <<<"$DOCKER_RELEASE_PASSWORD"
+            docker login -u="$DOCKER_RELEASE_USERNAME" --password-stdin "${RELEASE_DOCKER_REPO%%/*}" <<<"$DOCKER_RELEASE_PASSWORD"
         fi
         make release
         ;;
     RC)
         if [[ -n "${DOCKER_RELEASE_USERNAME:-}" ]]; then
-            docker login -u="$DOCKER_RELEASE_USERNAME" --password-stdin "${AMBASSADOR_EXTERNAL_DOCKER_REPO%%/*}" <<<"$DOCKER_RELEASE_PASSWORD"
+            docker login -u="$DOCKER_RELEASE_USERNAME" --password-stdin "${RELEASE_DOCKER_REPO%%/*}" <<<"$DOCKER_RELEASE_PASSWORD"
         fi
-        make docker-push DOCKER_PUSH_AS="${AMBASSADOR_EXTERNAL_DOCKER_REPO}:${GIT_TAG_SANITIZED}" # public X.Y.Z-rcA
-        make docker-push DOCKER_PUSH_AS="${AMBASSADOR_EXTERNAL_DOCKER_REPO}:${LATEST_RC}"         # public X.Y.Z-rc-latest
-        make VERSION="$VERSION" SCOUT_APP_KEY=testapp.json STABLE_TXT_KEY=teststable.txt update-aws
+        make release-rc
         ;;
     EA)
         if [[ -n "${DOCKER_RELEASE_USERNAME:-}" ]]; then
-            docker login -u="$DOCKER_RELEASE_USERNAME" --password-stdin "${AMBASSADOR_EXTERNAL_DOCKER_REPO%%/*}" <<<"$DOCKER_RELEASE_PASSWORD"
+            docker login -u="$DOCKER_RELEASE_USERNAME" --password-stdin "${RELEASE_DOCKER_REPO%%/*}" <<<"$DOCKER_RELEASE_PASSWORD"
         fi
-        make docker-push DOCKER_PUSH_AS="${AMBASSADOR_EXTERNAL_DOCKER_REPO}:${GIT_TAG_SANITIZED}" # public X.Y.Z-eaA
-        make VERSION="$VERSION" SCOUT_APP_KEY=earlyapp.json STABLE_TXT_KEY=earlystable.txt update-aws
+        make release-ea
         ;;
     *)
         : # Nothing to do

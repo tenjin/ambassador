@@ -6,14 +6,17 @@ Rate limiting is a powerful technique to improve the [availability and resilienc
 
 Ambassador lets users add one or more labels to a given request. These labels are added as part of a `Mapping` object. For example:
 
-```
-apiVersion: ambassador/v1
-kind: Mapping
-name: catalog
-prefix: /catalog/
-service: catalog
-request_labels:
-  - service: catalog
+```yaml
+---
+apiVersion: getambassador.io/v1
+kind:  Mapping
+metadata:
+  name:  catalog
+spec:
+  prefix: /catalog/
+  service: catalog
+  request_labels:
+    - service: catalog
 ```
 
 For more information on request labels, see the [Rate Limit reference](/reference/rate-limits).
@@ -28,15 +31,17 @@ Ambassador allows setting a default label on every request. A default label is s
 
 ```yaml
 ---
-apiVersion: ambassador/v1
-kind: Module
-name: ambassador
-config:
-  default_label_domain: ambassador
-  default_labels:
-    ambassador:
-      defaults:
-      - remote_address
+apiVersion: getambassador.io/v1
+kind:  Module
+metadata:
+  name:  ambassador
+spec:
+  config:
+    default_label_domain: ambassador
+    default_labels:
+      ambassador:
+        defaults:
+        - remote_address
 ```
 
 ## External Rate Limit Service
@@ -69,15 +74,23 @@ A `RateLimitService` manifest configures Ambassador to use an external service t
 
 ```yaml
 ---
-apiVersion: ambassador/v1
-kind: RateLimitService
-name: ratelimit
-service: "example-rate-limit:5000"
+apiVersion: getambassador.io/v1
+kind:  RateLimitService
+metadata:
+  name:  ratelimit
+spec:
+  service: "example-rate-limit:5000"
 ```
 
 - `service` gives the URL of the rate limit service.
 
 You may only use a single `RateLimitService` manifest.
+
+## Rate Limit Service and TLS
+
+You can tell Ambassador to use TLS to talk to your service by using a `RateLimitService` with an `https://` prefix. However, you may also provide a `tls` attribute: if `tls` is present and `true`, Ambassador will originate TLS even if the `service` does not have the `https://` prefix.
+
+If `tls` is present with a value that is not `true`, the value is assumed to be the name of a defined TLS context, which will determine the certificate presented to the upstream service.
 
 ## Example
 
@@ -89,5 +102,3 @@ The [Ambassador Rate Limiting Tutorial](/user-guide/rate-limiting-tutorial) has 
 * [Rate limiting for API Gateways](https://blog.getambassador.io/rate-limiting-for-api-gateways-892310a2da02)
 * [Implementing a Java Rate Limiting Service for Ambassador](https://blog.getambassador.io/implementing-a-java-rate-limiting-service-for-the-ambassador-api-gateway-e09d542455da)
 * [Designing a Rate Limit Service for Ambassador](https://blog.getambassador.io/designing-a-rate-limiting-service-for-ambassador-f460e9fabedb)
-
-

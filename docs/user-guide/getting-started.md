@@ -18,7 +18,7 @@ clusters with RBAC enabled by default, and unfortunately the above command may n
 Note: If you're using Google Kubernetes Engine with RBAC, you'll need to grant permissions to the account that will be setting up Ambassador. To do this, get your official GKE username, and then grant `cluster-admin` role privileges to that username:
 
 ```
-$ kubectl create clusterrolebinding my-cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud info --format="value(config.account)")
+kubectl create clusterrolebinding my-cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud info --format="value(config.account)")
 ```
 
 If RBAC is enabled:
@@ -45,7 +45,8 @@ For production configurations, we recommend you download these YAML files as you
 ## 2. Defining the Ambassador Service
 
 Ambassador is deployed as a Kubernetes Service that references the ambassador
-Deployment you deployed previously. Create the following YAML and put it in a file called `ambassador-service.yaml`.
+Deployment you deployed previously. Create the following YAML and put it in a file called
+`ambassador-service.yaml`.
 
 ```yaml
 ---
@@ -83,24 +84,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tour
-  annotations:
-    getambassador.io/config: |
-      ---
-      apiVersion: ambassador/v1
-      kind: Mapping
-      name: tour-ui_mapping
-      prefix: /
-      service: tour:5000
-      ---
-      apiVersion: ambassador/v1
-      kind: Mapping
-      name: tour-backend_mapping
-      prefix: /backend/
-      service: tour:8080
-      labels:
-        ambassador:
-          - request_label:
-            - backend
 spec:
   ports:
   - name: ui
@@ -130,12 +113,12 @@ spec:
     spec:
       containers:
       - name: tour-ui
-        image: quay.io/datawire/tour:ui-%tourVersion%
+        image: quay.io/datawire/tour:ui-$tourVersion$
         ports:
         - name: http
           containerPort: 5000
       - name: quote
-        image: quay.io/datawire/tour:backend-%tourVersion%
+        image: quay.io/datawire/tour:backend-$tourVersion$
         ports:
         - name: http
           containerPort: 8080
@@ -143,7 +126,26 @@ spec:
           limits:
             cpu: "0.1"
             memory: 100Mi
-
+---
+apiVersion: getambassador.io/v1
+kind: Mapping
+metadata:
+  name: tour-ui
+spec:
+  prefix: /
+  service: tour:5000
+---
+apiVersion: getambassador.io/v1
+kind: Mapping
+metadata:
+  name: tour-backend
+spec:
+  prefix: /backend/
+  service: tour:8080
+  labels:
+    ambassador:
+      - request_label:
+        - backend
 ```
 
 Then, apply it to the Kubernetes with `kubectl`:
@@ -158,9 +160,20 @@ This YAML has also been published so you can deploy it remotely:
 kubectl apply -f https://getambassador.io/yaml/tour/tour.yaml
 ```
 
-When the service is deployed, Ambassador will notice the `getambassador.io/config` annotation on the service, and use the `Mapping` contained in it to configure the route.  (There's no restriction on what kinds of Ambassador configuration can go into the annotation, but it's important to note that Ambassador only looks at annotations on Kubernetes `Service`s.)
+When the `Mapping` CRDs are applied, Ambassador will use them to configure routing:
 
-In this case, the mapping creates two routes. One that will route traffic from the `/` endpoint to the `tour-ui` React application and one that will route traffic from the `/backend/` endpoint to the `tour-backend` service. Note the port assignments in the `service` field of the `Mapping`. This allows us to use a single service to route to both the containers running on the `tour` pod.
+- The first `Mapping` causes traffic from the `/` endpoint to be routed to the `tour-ui` React application.
+- The second `Mapping` causes traffic from the `/backend/` endpoint to be routed to the `tour-backend` service.
+
+Note also the port numbers in the `service` field of the `Mapping`. This allows us to use a single service to route to both the containers running on the `tour` pod.
+
+<font color=#f9634E>**Important:**</font>
+
+Routing in Ambassador can be configured with Ambassador resources as shown above, Kubernetes service annotation, and Kubernetes Ingress resources. 
+
+Ambassador custom resources are the recommended config format and will be used throughout the documentation.
+
+See [configuration format](/reference/config-format) for more information on your configuration options.
 
 ## 4. Testing the Mapping
 
@@ -209,7 +222,24 @@ http://localhost/
 
 ## 5. The Diagnostics Service in Kubernetes
 
-Ambassador includes an integrated diagnostics service to help with troubleshooting. By default, this is not exposed to the Internet. To view it, we'll need to get the name of one of the Ambassador pods:
+Ambassador includes an integrated diagnostics service to help with troubleshooting. 
+
+By default, this is exposed to the internet at the URL `http://{{AMBASSADOR_HOST}}/ambassador/v0/diag/`. Go to that URL from a web browser to view the diagnostic UI.
+
+You can change the default so it is not exposed externally by default by setting `diagnostics.enabled: false` in the [ambassador `Module`](/reference/core/ambassador). 
+
+```yaml
+apiVersion: getambassador.io/v1
+kind: Module
+metadata:
+  name: ambassador
+spec:
+  config:
+    diagnostics:
+      enabled: false
+```
+
+After applying this `Module`, to view the diagnostics UI, we'll need to get the name of one of the Ambassador pods:
 
 ```
 $ kubectl get pods
