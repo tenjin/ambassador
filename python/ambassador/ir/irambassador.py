@@ -95,7 +95,6 @@ class IRAmbassador (IRResource):
             envoy_log_filter={},
             envoy_log_path="/dev/fd/1",
             envoy_log_type="text",
-            envoy_log_path="/dev/fd/1",
             envoy_log_format=None,
             enable_ipv4=True,
             liveness_probe={"enabled": True},
