@@ -710,6 +710,11 @@ class V2Listener(dict):
                 # tcp loggers do not support additional headers
                 self.access_log.append({"name": "envoy.tcp_grpc_access_log", "config": access_log_obj})
 
+        access_log_params = {}
+
+        if self.config.ir.ambassador_module.envoy_log_filter:
+            access_log_params['filter'] = self.config.ir.ambassador_module.envoy_log_filter
+
         # Use sane access log spec in JSON
         if self.config.ir.ambassador_module.envoy_log_type.lower() == "json":
             json_format = {
@@ -742,14 +747,14 @@ class V2Listener(dict):
                 json_format['dd.trace_id'] = '%REQ(X-DATADOG-TRACE-ID)%'
                 json_format['dd.span_id'] = '%REQ(X-DATADOG-PARENT-ID)%'
 
-            self.access_log.append({
+            self.access_log.append(dict({
                 'name': 'envoy.file_access_log',
                 'typed_config': {
                     '@type': 'type.googleapis.com/envoy.config.accesslog.v2.FileAccessLog',
                     'path': self.config.ir.ambassador_module.envoy_log_path,
                     'json_format': json_format
                 }
-            })
+            }, **access_log_params))
         else:
             # Use a sane access log spec
             log_format = self.config.ir.ambassador_module.get('envoy_log_format', None)
@@ -758,14 +763,14 @@ class V2Listener(dict):
                 log_format = 'ACCESS [%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% \"%REQ(X-FORWARDED-FOR)%\" \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" \"%REQ(:AUTHORITY)%\" \"%UPSTREAM_HOST%\"'
 
             self.config.ir.logger.debug("V2Listener: Using log_format '%s'" % log_format)
-            self.access_log.append({
+            self.access_log.append(dict({
                 'name': 'envoy.file_access_log',
                 'typed_config': {
                     '@type': 'type.googleapis.com/envoy.config.accesslog.v2.FileAccessLog',
                     'path': self.config.ir.ambassador_module.envoy_log_path,
                     'format': log_format + '\n'
                 }
-            })
+            }, **access_log_params))
 
         # Save upgrade configs.
         for group in self.config.ir.ordered_groups():
